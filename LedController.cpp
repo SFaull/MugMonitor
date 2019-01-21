@@ -3,15 +3,16 @@
 
 LEDController::LEDController(CRGB *_leds)
 {
+  
   currentMode = kFadeAll;
   isPulse = false;
-  runTime = 0;
   ledTimer = 0;
   pulseTimer = 0;
   leds = _leds;
   ledCount = 1;// sizeof(leds) / sizeof(CRGB);  // this doesnt work FIXME
-  target_met = false;
+  setColour(0,0,0); // off
   setColourTarget(0,0,0); // off
+  arrayIndex = 0;
 }
 
 void LEDController::setModeToSweep(void)
@@ -33,7 +34,19 @@ void LEDController::run(void)
       if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
       {
         setTimer(&ledTimer); // reset timer
-        fadeToColourTarget();
+        // display the current buffer colour
+        setColour(transition[arrayIndex][0],transition[arrayIndex][1],transition[arrayIndex][2]);
+
+        // now that it's been used, update the buffer colour to the target
+        transition[arrayIndex][0] = target_colour[0];
+        transition[arrayIndex][1] = target_colour[1];
+        transition[arrayIndex][2] = target_colour[2];
+
+          // increment the array index
+          if (arrayIndex < STEPS - 1)
+            arrayIndex++;
+          else
+            arrayIndex=0;
       }
   
       if(timerExpired(pulseTimer, PULSE_TIMEOUT) && isPulse)
@@ -52,13 +65,12 @@ void LEDController::run(void)
     break;
   }
 
+
 }
 
 
 void LEDController::setColourTarget(int r, int g, int b)
-{
-  target_met = false;
-  
+{  
   target_colour[0] = r;
   target_colour[1] = g;
   target_colour[2] = b;
@@ -67,7 +79,6 @@ void LEDController::setColourTarget(int r, int g, int b)
 
 void LEDController::pulse(int r, int g, int b)
 {
-  target_met = false;
   isPulse = true;
   setTimer(&pulseTimer);
   target_colour[0] = r;
@@ -79,12 +90,18 @@ void LEDController::pulse(int r, int g, int b)
 
 void LEDController::setColourTransition(void)
 {
-  for(int addr=0; addr<STEPS; addr++)  // for each element in the array
+  int counter = 0;
+  int addr = arrayIndex;
+  
+  for(addr; addr<STEPS; addr++)  // for each element in the array
   {
     for (int i=0; i<3; i++)  // for each colour in turn
     {
-      transition[addr][i] = map(addr, 0, STEPS-1, current_colour[i], target_colour[i]); // compute the proportional colour value
+      transition[addr][i] = map(counter, 0, STEPS-1, current_colour[i], target_colour[i]); // compute the proportional colour value
     }
+    counter++;
+    //Serial.print("Address: ");
+    //Serial.println(addr);
     /*
     Serial.print(transition[addr][0]);
     Serial.print(",");
@@ -93,22 +110,25 @@ void LEDController::setColourTransition(void)
     Serial.println(transition[addr][2]);
     */
   }
-}
 
-void LEDController::fadeToColourTarget(void)
-{
-  static int addr = 0;
-    
-  if(!target_met)
+  addr = 0;
+  
+  for(addr; addr<arrayIndex; addr++)  // for each element in the array
   {
-    setColour(transition[addr][0],transition[addr][1],transition[addr][2]);
-    addr++;
-    
-    if (addr>=STEPS)
+    for (int i=0; i<3; i++)  // for each colour in turn
     {
-      target_met = true;
-      addr = 0;
-    }      
+      transition[addr][i] = map(counter, 0, STEPS-1, current_colour[i], target_colour[i]); // compute the proportional colour value
+    }
+    counter++;
+    //Serial.print("Address: ");
+    //Serial.println(addr);
+    /*
+    Serial.print(transition[addr][0]);
+    Serial.print(",");
+    Serial.print(transition[addr][1]);
+    Serial.print(",");
+    Serial.println(transition[addr][2]);
+    */
   }
 }
 
@@ -136,20 +156,21 @@ void LEDController::applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex = 
       {
         leds[i] = CRGB(r,g,b); 
       }
-      Serial.print("Whole strip set to ");
+      //Serial.print("Whole strip set to ");
 
     }
     else
     {
       leds[ledIndex] = CRGB(r,g,b);
-      Serial.print("Index "); Serial.print(ledIndex); Serial.print(" set to "); 
+      //Serial.print("Index "); Serial.print(ledIndex); Serial.print(" set to "); 
     }
-    
+    /*
     Serial.print(r);
     Serial.print(",");
     Serial.print(g);
     Serial.print(",");
     Serial.println(b);
+    */
     FastLED.show();
   }
   else
@@ -159,16 +180,14 @@ void LEDController::applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex = 
 /* pass this function a pointer to an unsigned long to store the start time for the timer */
 void LEDController::setTimer(unsigned long *startTime)
 {
-  runTime = millis();    // get time running in ms
-  *startTime = runTime;  // store the current time
+  *startTime = millis();  // store the current time
 }
 
 /* call this function and pass it the variable which stores the timer start time and the desired expiry time 
    returns true fi timer has expired */
 bool LEDController::timerExpired(unsigned long startTime, unsigned long expiryTime)
 {
-  runTime = millis(); // get time running in ms
-  if ( (runTime - startTime) >= expiryTime )
+  if ( ( millis() - startTime) >= expiryTime )
     return true;
   else
     return false;

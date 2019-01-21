@@ -7,7 +7,7 @@
 #define DATA_PIN 3
 #define BUZZER_PIN 8
 #define LED_UPDATE_TIMEOUT 20
-#define STARTUP_ANIMATION_DURATION 700 // 0.7 seconds
+#define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
@@ -170,15 +170,15 @@ void updateLEDs(void)
   //(temp_object - temp_min)/(temp_max - temp_min) * 256
 
             /* Periodically update the LEDs */
-      //if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
-      //{
+      if(timerExpired(ledTimer, 250))
+      {
         setTimer(&ledTimer); // reset timer
         int r = map(temp_object, temp_min, temp_max, 0, 256);
         int g = 0;
         int b = map(temp_object, temp_min, temp_max, 256, 0);
       
         ledController.setColourTarget(r,g,b);
-      //}
+      }
   
 
 }
@@ -186,7 +186,7 @@ void updateLEDs(void)
 /* object is assumed present if there is a large enough positive delta between object temp and ambient temp */
 bool isObjectPresent(void)
 {
-  const double threshold = 4.0;
+  const double threshold = 2.0;
   double temp_delta = temp_object - temp_ambient;
   //Serial.println(temp_delta);
 

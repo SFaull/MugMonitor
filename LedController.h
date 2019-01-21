@@ -22,20 +22,18 @@ class LEDController
     
   private:
     void setColourTransition(void);
-    void fadeToColourTarget(void);
     void sweepToColourTarget(void);
     void applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex = -1);
     void setTimer(unsigned long *startTime);
     bool timerExpired(unsigned long startTime, unsigned long expiryTime);
     
     CRGB *leds;
+    int arrayIndex;
     int ledCount;
-    bool target_met;
     unsigned int target_colour[3];
     unsigned int current_colour[3];
     unsigned int transition[STEPS][3];
 
-    unsigned long runTime;
     unsigned long ledTimer;
     unsigned long pulseTimer;
     bool isPulse;
