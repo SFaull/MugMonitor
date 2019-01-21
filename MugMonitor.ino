@@ -7,6 +7,7 @@
 #define DATA_PIN 3
 #define BUZZER_PIN 8
 #define LED_UPDATE_TIMEOUT 20
+#define STARTUP_ANIMATION_DURATION 700 // 0.7 seconds
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
@@ -15,8 +16,8 @@ LEDController ledController(leds);
 // Create an instance of the sensor class
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
-unsigned long runTime;
 unsigned long ledTimer;
+unsigned long animationTimer;
 
 typedef enum {
     kStandby = 0,
@@ -50,7 +51,7 @@ void setup()
 
 void loop() 
 {
-  ledController.run();
+  ledController.run();  // refresh the LEDs
   switch(currentState)
   {
       case kStandby:
@@ -76,6 +77,7 @@ state_t transition_A(void)
     // TODO: intiate startup animation
     //ledController.setColourTarget(255,255,255); // TODO: change to some sort of sweeping animation to the temperature mapped colour
     Serial.println("Transition A");
+    setTimer(&animationTimer); // reset timer
     return kStartup;
 }
 state_t transition_B(void)
@@ -112,8 +114,20 @@ state_t do_Standby(void)
 state_t do_Startup(void)
 {
   //Serial.println("Startup");
-  // animation process
-  return transition_B();
+
+  // do animation
+  
+  if(timerExpired(animationTimer, STARTUP_ANIMATION_DURATION))
+  {
+    // animation complete, go into normal runing mode
+      updateReadings();
+      if (isObjectPresent())
+        return transition_B();
+      else
+        return transition_D();  // or go back into standby if object is gone
+  }
+  
+  return kStartup;
 }
 
 state_t do_Running(void)
@@ -172,7 +186,7 @@ void updateLEDs(void)
 /* object is assumed present if there is a large enough positive delta between object temp and ambient temp */
 bool isObjectPresent(void)
 {
-  const double threshold = 2.0;
+  const double threshold = 4.0;
   double temp_delta = temp_object - temp_ambient;
   //Serial.println(temp_delta);
 
@@ -196,17 +210,14 @@ void soundAlarm(void)
 /* pass this function a pointer to an unsigned long to store the start time for the timer */
 void setTimer(unsigned long *startTime)
 {
-  runTime = millis();    // get time running in ms
-  *startTime = runTime;  // store the current time
+  *startTime = millis();;  // store the current time
 }
 
 /* call this function and pass it the variable which stores the timer start time and the desired expiry time 
    returns true fi timer has expired */
 bool timerExpired(unsigned long startTime, unsigned long expiryTime)
 {
-  runTime = millis(); // get time running in ms
-  if ( (runTime - startTime) >= expiryTime )
+  if ( (millis() - startTime) >= expiryTime )
     return true;
-  else
-    return false;
+  return false;
 }
