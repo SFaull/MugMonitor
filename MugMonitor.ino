@@ -1,18 +1,13 @@
-#include <Wire.h>
-#include "FastLED.h"
-#include "LedController.h"
+#include <TinyWireM.h> 
+#include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
 
-#define NUM_LEDS 1
-#define DATA_PIN 3
-#define BUZZER_PIN 8
+#define NUM_LEDS 12
+#define DATA_PIN 1
 #define LED_UPDATE_TIMEOUT 20
 #define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
 
-// Define the array of leds
-CRGB leds[NUM_LEDS];
-// Create an instance of the led controller class
-LEDController ledController(leds);
+Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 // Create an instance of the sensor class
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
@@ -39,19 +34,16 @@ void setup()
 {
   // initialise sensor
   mlx.begin();  
-  Serial.begin(115200);
+  //Serial.begin(115200);
   // initialise LED strip
-  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  // ensure LEDS are off
-  ledController.setColour(0,0,0);
-  ledController.setColourTarget(0,0,0);
+  pixel.begin(); // This initializes the NeoPixel library.
   
   currentState = kStandby;
 }
 
 void loop() 
 {
-  ledController.run();  // refresh the LEDs
+  pixel.show(); // This sends the updated pixel color to the hardware.
   switch(currentState)
   {
       case kStandby:
@@ -90,7 +82,7 @@ state_t transition_B(void)
 state_t transition_C(void)
 {
   // TODO: intiate shutdown animation
-  ledController.setColourTarget(0,0,0);
+  SetColour(0,0,0);
   Serial.println("Transition C");
     return kShutdown;
 }
@@ -177,7 +169,7 @@ void updateLEDs(void)
         int g = 0;
         int b = map(temp_object, temp_min, temp_max, 256, 0);
       
-        ledController.setColourTarget(r,g,b);
+        SetColour(r,g,b);
       }
   
 
@@ -199,12 +191,7 @@ bool isObjectPresent(void)
 
 void soundAlarm(void)
 {
-    /*Tone needs 2 arguments, but can take three
-    1) Pin#
-    2) Frequency - this is in hertz (cycles per second) which determines the pitch of the noise made
-    3) Duration - how long teh tone plays
-  */
-  tone(BUZZER_PIN, 1000, 500);
+  
 }
 
 /* pass this function a pointer to an unsigned long to store the start time for the timer */
@@ -220,4 +207,10 @@ bool timerExpired(unsigned long startTime, unsigned long expiryTime)
   if ( (millis() - startTime) >= expiryTime )
     return true;
   return false;
+}
+
+void SetColour(uint8_t r, uint8_t g, uint8_t b)
+{
+  for (int i=0; i<NUM_LEDS; i++)
+    pixel.setPixelColor(i, pixel.Color(r,g,b));  
 }

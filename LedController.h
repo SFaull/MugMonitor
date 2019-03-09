@@ -23,7 +23,7 @@ class LEDController
   private:
     void setColourTransition(void);
     void sweepToColourTarget(void);
-    void applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex = -1);
+    void applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex);
     void setTimer(unsigned long *startTime);
     bool timerExpired(unsigned long startTime, unsigned long expiryTime);
     

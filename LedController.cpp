@@ -142,11 +142,11 @@ void LEDController::setColour(int r, int g, int b)
   current_colour[0] = r;
   current_colour[1] = g;
   current_colour[2] = b;
-  applyColour(current_colour[0],current_colour[1],current_colour[2]);
+  applyColour(current_colour[0],current_colour[1],current_colour[2], -1);
 }
 
 // optional led index parameter. if omitted, whole strip will be set to colour
-void LEDController::applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex = -1)
+void LEDController::applyColour(uint8_t r, uint8_t g, uint8_t b, int ledIndex)
 {
   if (r < 256 && g < 256 && b < 256)
   {
