@@ -47,7 +47,6 @@ void setup()
 {
   // initialise sensor
   mlx.begin();  
-  //Serial.begin(115200);
   // initialise LED strip
   pixel.begin(); // This initializes the NeoPixel library.
   
@@ -104,7 +103,6 @@ state_t transition_C(void)
 state_t transition_D(void)
 {
     SetColourAll(0,0,0);
-    Serial.println("Transition D");
     return kStandby;
 }
 
@@ -167,9 +165,18 @@ state_t do_Running(void)
   if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
     setTimer(&ledTimer); // reset timer
-    int r = map(temp_object, temp_min, temp_max, 0, BRIGHTNESS);
-    int g = 0;
-    int b = map(temp_object, temp_min, temp_max, BRIGHTNESS, 0);
+
+    int r,g,b;
+    g = 0;
+    
+    if (temp_object < temp_min)
+      temp_object=temp_min;
+
+    if (temp_object > temp_max)
+      temp_object=temp_max;
+    
+    r = map(temp_object, temp_min, temp_max, 0, BRIGHTNESS);
+    b = map(temp_object, temp_min, temp_max, BRIGHTNESS, 0);
   
     SetColourTargetAll(r,g,b);
   }
@@ -198,9 +205,6 @@ void updateReadings(void)
   // read the sensor
   temp_ambient = mlx.readAmbientTempC();
   temp_object = mlx.readObjectTempC();
-    // print debug info
-  //Serial.print("Ambient: "); Serial.println(temp_ambient);
-  //Serial.print("Object: "); Serial.println(temp_object);
 }
 
 /* object is assumed present if there is a large enough positive delta between object temp and ambient temp */
@@ -208,18 +212,12 @@ bool isObjectPresent(void)
 {
   const double threshold = 2.0;
   double temp_delta = temp_object - temp_ambient;
-  //Serial.println(temp_delta);
-
   // check delta is large enough and that object temperature exceeds minimum temperature
+  // TODO: should also be a condition in here to check that  temp_object > temp_min
   if (temp_delta > threshold && temp_object > off_threshold)
     return true;
 
   return false;
-}
-
-void soundAlarm(void)
-{
-  
 }
 
 /* pass this function a pointer to an unsigned long to store the start time for the timer */
