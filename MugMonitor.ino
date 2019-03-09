@@ -1,3 +1,11 @@
+/*  Known issues:
+ *  - No hysterisis implemented - there is temperature value which will sit on the edge of the threshold and cause
+ *    cycling through all states.
+ *  - In the "running state", colour always seems to go to red first and then drop back to blue (when the object is cold)
+ *  
+ */
+
+
 #include <TinyWireM.h> 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
@@ -6,7 +14,9 @@
 #define DATA_PIN 1
 #define LED_UPDATE_TIMEOUT 10
 #define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
-#define SWEEP_TIMEOUT 50
+#define SWEEP_TIMEOUT 30
+
+#define BRIGHTNESS 255
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 // Create an instance of the sensor class
@@ -67,6 +77,7 @@ void loop()
   }
 }
 uint8_t ledIndex = 0;
+uint8_t startupCycles = 0;
 
 state_t transition_A(void)
 {
@@ -74,6 +85,7 @@ state_t transition_A(void)
     SetColourAll(0,0,0);
     setTimer(&animationTimerA); // reset timer
     ledIndex=0;
+    startupCycles=0;
     return kStartup;
 }
 state_t transition_B(void)
@@ -106,27 +118,33 @@ state_t do_Standby(void)
   return kStandby;
 }
 
+
+
 state_t do_Startup(void)
 {
   //Serial.println("Startup");
-  
+
+  // at the end of each animation cycle see, whetehr the object is still there ( exit if not)
   if(ledIndex >= NUM_LEDS)
   {
     ledIndex = 0;
-        // animation complete, go into normal runing mode
-      updateReadings();
-      if (isObjectPresent())
-        return transition_B();
-      else
-        return transition_D();  // or go back into standby if object is gone
+    startupCycles++;
+    
+     updateReadings();
+      if (!isObjectPresent())
+        return transition_D();
   }
+
+  // Once all animations complete
+  if (startupCycles >= 3)
+        return transition_B();
 
   // do animation
   if(timerExpired(animationTimerA, SWEEP_TIMEOUT))
   {
     setTimer(&animationTimerA); // reset timer
     SetColourAll(0,0,0);
-    SetColour(ledIndex++,255,255,255);
+    SetColour(ledIndex++,BRIGHTNESS,BRIGHTNESS,BRIGHTNESS);
   }
   
   return kStartup;
@@ -149,9 +167,9 @@ state_t do_Running(void)
   if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
     setTimer(&ledTimer); // reset timer
-    int r = map(temp_object, temp_min, temp_max, 0, 256);
+    int r = map(temp_object, temp_min, temp_max, 0, BRIGHTNESS);
     int g = 0;
-    int b = map(temp_object, temp_min, temp_max, 256, 0);
+    int b = map(temp_object, temp_min, temp_max, BRIGHTNESS, 0);
   
     SetColourTargetAll(r,g,b);
   }
