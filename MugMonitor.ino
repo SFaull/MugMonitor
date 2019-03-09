@@ -4,15 +4,18 @@
 
 #define NUM_LEDS 12
 #define DATA_PIN 1
-#define LED_UPDATE_TIMEOUT 20
+#define LED_UPDATE_TIMEOUT 10
 #define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
+#define SWEEP_TIMEOUT 50
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 // Create an instance of the sensor class
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 unsigned long ledTimer;
-unsigned long animationTimer;
+unsigned long animationTimerA;
+
+uint8_t currentColour[3];
 
 typedef enum {
     kStandby = 0,
@@ -26,7 +29,7 @@ state_t currentState;
 double temp_ambient = 0;
 double temp_object = 0;
 double temp_max = 70.0; //deg C
-double temp_min = 10.0; //deg C
+double temp_min = 50.0; //deg C
 double cold2hold_threshold = 50.0;  // not considered drinkable below this temp.
 double off_threshold = 21.0;  // assumed to be no cup presetent below this temperature
 
@@ -63,33 +66,32 @@ void loop()
           break;
   }
 }
+uint8_t ledIndex = 0;
 
 state_t transition_A(void)
 {
     // TODO: intiate startup animation
-    //ledController.setColourTarget(255,255,255); // TODO: change to some sort of sweeping animation to the temperature mapped colour
-    Serial.println("Transition A");
-    setTimer(&animationTimer); // reset timer
+    SetColourAll(0,0,0);
+    setTimer(&animationTimerA); // reset timer
+    ledIndex=0;
     return kStartup;
 }
 state_t transition_B(void)
 {
     // do nothing
-    Serial.println("Transition B");
+    SetColourAll(0,0,0);
     return kRunning;
 }
 
 state_t transition_C(void)
 {
-  // TODO: intiate shutdown animation
-  SetColour(0,0,0);
-  Serial.println("Transition C");
+    setTimer(&ledTimer); // reset timer
     return kShutdown;
 }
 
 state_t transition_D(void)
 {
-    // do nothing
+    SetColourAll(0,0,0);
     Serial.println("Transition D");
     return kStandby;
 }
@@ -97,6 +99,7 @@ state_t transition_D(void)
 state_t do_Standby(void)
 {
   //Serial.println("Standby");
+    
   updateReadings();
   if (isObjectPresent())
     return transition_A();
@@ -106,17 +109,24 @@ state_t do_Standby(void)
 state_t do_Startup(void)
 {
   //Serial.println("Startup");
-
-  // do animation
   
-  if(timerExpired(animationTimer, STARTUP_ANIMATION_DURATION))
+  if(ledIndex >= NUM_LEDS)
   {
-    // animation complete, go into normal runing mode
+    ledIndex = 0;
+        // animation complete, go into normal runing mode
       updateReadings();
       if (isObjectPresent())
         return transition_B();
       else
         return transition_D();  // or go back into standby if object is gone
+  }
+
+  // do animation
+  if(timerExpired(animationTimerA, SWEEP_TIMEOUT))
+  {
+    setTimer(&animationTimerA); // reset timer
+    SetColourAll(0,0,0);
+    SetColour(ledIndex++,255,255,255);
   }
   
   return kStartup;
@@ -136,14 +146,33 @@ state_t do_Running(void)
   }
   //Serial.println("Object present!");
   // update the LED colours based on temp
-  updateLEDs();
+  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+  {
+    setTimer(&ledTimer); // reset timer
+    int r = map(temp_object, temp_min, temp_max, 0, 256);
+    int g = 0;
+    int b = map(temp_object, temp_min, temp_max, 256, 0);
+  
+    SetColourTargetAll(r,g,b);
+  }
+
+
   return kRunning;
 }
 
 state_t do_Shutdown(void)
 {
   //Serial.println("Shutdown");
+  if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
+  {
+    setTimer(&ledTimer); // reset timer
+    SetColourTargetAll(0,0,0);
+  }
+
+  if(currentColour[0] == 0 && currentColour[1] == 0 && currentColour[2] == 0)
    return transition_D();
+
+  return kShutdown;
 }
 
 void updateReadings(void)
@@ -154,25 +183,6 @@ void updateReadings(void)
     // print debug info
   //Serial.print("Ambient: "); Serial.println(temp_ambient);
   //Serial.print("Object: "); Serial.println(temp_object);
-}
-
-void updateLEDs(void)
-{
-  // TODO update these values based on temperature
-  //(temp_object - temp_min)/(temp_max - temp_min) * 256
-
-            /* Periodically update the LEDs */
-      if(timerExpired(ledTimer, 250))
-      {
-        setTimer(&ledTimer); // reset timer
-        int r = map(temp_object, temp_min, temp_max, 0, 256);
-        int g = 0;
-        int b = map(temp_object, temp_min, temp_max, 256, 0);
-      
-        SetColour(r,g,b);
-      }
-  
-
 }
 
 /* object is assumed present if there is a large enough positive delta between object temp and ambient temp */
@@ -209,8 +219,33 @@ bool timerExpired(unsigned long startTime, unsigned long expiryTime)
   return false;
 }
 
-void SetColour(uint8_t r, uint8_t g, uint8_t b)
+void SetColour(uint8_t index, uint8_t r, uint8_t g, uint8_t b)
 {
+    pixel.setPixelColor(index, pixel.Color(r,g,b));  
+}
+
+void SetColourAll(uint8_t r, uint8_t g, uint8_t b)
+{  
+  currentColour[0] = r;
+  currentColour[1] = g;
+  currentColour[2] = b;
+  
   for (int i=0; i<NUM_LEDS; i++)
     pixel.setPixelColor(i, pixel.Color(r,g,b));  
+}
+
+void SetColourTargetAll(uint8_t r, uint8_t g, uint8_t b)
+{
+  uint8_t temp[3] = {r,g,b};
+
+  for (int i= 0; i<3; i++)
+  {
+    if(currentColour[i]<temp[i])
+      currentColour[i]++;
+    else if (currentColour[i]>temp[i])
+      currentColour[i]--;
+  }
+  
+  for (int i=0; i<NUM_LEDS; i++)
+    pixel.setPixelColor(i, pixel.Color(currentColour[0],currentColour[1],currentColour[2]));  
 }
