@@ -13,16 +13,21 @@
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
 
-#define NUM_LEDS 12
+#define NUM_LEDS 13 // actually only 12 LEDs, one fake one to account for gap by connector
 #define DATA_PIN 1
 #define LED_UPDATE_TIMEOUT 5
 #define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
 #define SWEEP_TIMEOUT 30
 
-#define BRIGHTNESS 255
+// configuration options (all temperatures are scaled up by 10)
+#define BRIGHTNESS            200 // 255 is max 
+#define TEMP_SENSE_ON         350 // 35.0 degC
+#define TEMP_SENSE_OFF        300 // 30.0 degC
+#define TEMP_DELTA_THRESHOLD  20  // 2.0 degC
+#define TEMP_MAX              500 // 70.0 degC
+#define TEMP_MIN              350 // 45.0 degC
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
-// Create an instance of the sensor class
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 unsigned long ledTimer;
@@ -40,18 +45,15 @@ typedef enum {
 
 state_t currentState;
 
-// all temperatures are scaled up by 10
 uint16_t temp_ambient = 0;
 uint16_t temp_object = 0;
-uint16_t temp_max = 700; // 70.0 deg C
-uint16_t temp_min = 400; // 40.0 deg C
 
+uint8_t ledIndex = 0;
+uint8_t startupCycles = 0;
 
 void setup() 
 {
-  // initialise sensor
   mlx.begin();  
-  // initialise LED strip
   pixel.begin(); // This initializes the NeoPixel library.
   
   currentState = kStandby;
@@ -59,6 +61,23 @@ void setup()
 
 void loop() 
 {
+if(0)
+{
+  while(1)
+  {
+    pixel.show(); // This sends the updated pixel color to the hardware.
+    temp_object = (uint16_t)(mlx.readObjectTempC()*10.0);
+    temp_object/=100;
+    for (uint8_t i=0; i<NUM_LEDS; i++)
+    {
+      if(i<temp_object)
+        pixel.setPixelColor(i, pixel.Color(100,100,100));
+      else
+        pixel.setPixelColor(i, pixel.Color(0,0,0));
+    }  
+  }
+}
+  
   pixel.show(); // This sends the updated pixel color to the hardware.
   switch(currentState)
   {
@@ -82,8 +101,7 @@ void loop()
           break;
   }
 }
-uint8_t ledIndex = 0;
-uint8_t startupCycles = 0;
+
 
 state_t transition_A(void)
 {
@@ -96,7 +114,6 @@ state_t transition_A(void)
 }
 state_t transition_B(void)
 {
-    // do nothing
     SetColourAll(0,0,0);
     return kRunning;
 }
@@ -122,8 +139,6 @@ state_t transition_E(void)
 
 state_t do_Standby(void)
 {
-  //Serial.println("Standby");
-    
   updateReadings();
   if (isObjectPresent())
     return transition_A();
@@ -132,8 +147,6 @@ state_t do_Standby(void)
 
 state_t do_Startup(void)
 {
-  //Serial.println("Startup");
-
   // at the end of each animation cycle see, whetehr the object is still there ( exit if not)
   if(ledIndex >= NUM_LEDS)
   {
@@ -162,12 +175,11 @@ state_t do_Startup(void)
 
 state_t do_Running(void)
 {
-  //Serial.println("Running");
   // take temperature readings
   updateReadings();
   
   // if object gone, shutdown
-  if (!isObjectPresent())
+  if (isObjectRemoved())
   {
     //Serial.println("No object present!");
     return transition_C();
@@ -180,7 +192,6 @@ state_t do_Running(void)
     return transition_E();
   }
   
-  //Serial.println("Object present!");
   // update the LED colours based on temp
   if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
@@ -188,14 +199,14 @@ state_t do_Running(void)
 
     uint8_t r,b;
     
-    if (temp_object < temp_min)
-      temp_object=temp_min;
+    if (temp_object < TEMP_MIN)
+      temp_object=TEMP_MIN;
 
-    if (temp_object > temp_max)
-      temp_object=temp_max;
+    if (temp_object > TEMP_MAX)
+      temp_object=TEMP_MAX;
     
-    r = map(temp_object, temp_min, temp_max, 0, BRIGHTNESS);
-    b = map(temp_object, temp_min, temp_max, BRIGHTNESS, 0);
+    r = map(temp_object, TEMP_MIN, TEMP_MAX, 0, BRIGHTNESS);
+    b = map(temp_object, TEMP_MIN, TEMP_MAX, BRIGHTNESS, 0);
   
     SetColourTargetAll(r,0,b);
   }
@@ -209,12 +220,10 @@ state_t do_Reminder(void)
 {
   static bool targetMet = false;
   static uint8_t brightness = BRIGHTNESS;
-  //Serial.println("Reminder");
-
+  
   if(timerExpired(animationTimerA, 5))
   {
     setTimer(&animationTimerA); // reset timer
-    // TODO: animate a green pulse to indicate good drinking temperature
     targetMet = SetColourTargetAll(0,brightness, 0);
   }
 
@@ -236,7 +245,6 @@ state_t do_Reminder(void)
 
 state_t do_Shutdown(void)
 {
-  //Serial.println("Shutdown");
   if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
     setTimer(&ledTimer); // reset timer
@@ -252,20 +260,17 @@ state_t do_Shutdown(void)
 void updateReadings(void)
 {
   // read the sensor
-  temp_ambient = (uint16_t)(mlx.readAmbientTempC()*10);
-  temp_object = (uint16_t)(mlx.readObjectTempC()*10);
+  temp_ambient = (uint16_t)(mlx.readAmbientTempC()*10.0);
+  temp_object = (uint16_t)(mlx.readObjectTempC()*10.0);
 }
 
 /* object is assumed present if there is a large enough positive delta between object temp and ambient temp */
 bool isObjectPresent(void)
 {
-  const uint8_t off_threshold = 240;  // assumed to be no cup presetent below this temperature
-  const uint8_t threshold = 20;
   uint16_t temp_delta = temp_object - temp_ambient;
   
   // check delta is large enough and that object temperature exceeds minimum temperature
-  // TODO: should also be a condition in here to check that  temp_object > temp_min
-  if (temp_delta > threshold && temp_object > off_threshold)
+  if (temp_delta > TEMP_DELTA_THRESHOLD && temp_object > TEMP_SENSE_ON)
     return true;
 
   return false;
@@ -274,13 +279,13 @@ bool isObjectPresent(void)
 // assumes aboject was present in the first place
 bool isObjectRemoved(void)
 {
-  const uint8_t off_threshold = 210;  // assumed to be no cup presetent below this temperature
-  const uint8_t threshold = 20;
+  // TODO: this could be achieved a different way by looking for a rapid decrease in value
+  
   uint16_t temp_delta = temp_object - temp_ambient;
   
   // check delta is large enough and that object temperature exceeds minimum temperature
-  // TODO: should also be a condition in here to check that  temp_object > temp_min
-  if (temp_delta < threshold && temp_object < off_threshold)
+  // TODO: should also be a condition in here to check that  temp_object > TEMP_MIN
+  if (/*temp_delta < threshold && */temp_object < TEMP_SENSE_OFF)
     return true;
 
   return false;
