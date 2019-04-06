@@ -13,6 +13,8 @@
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
 
+//#define CAL_MODE  // uncomment to enter calibration mode (temperature displayed as clock, format rg.b degrees)
+
 #define NUM_LEDS 13 // actually only 12 LEDs, one fake one to account for gap by connector
 #define DATA_PIN 1
 #define LED_UPDATE_TIMEOUT 5
@@ -24,8 +26,10 @@
 #define TEMP_SENSE_ON         350 // 35.0 degC
 #define TEMP_SENSE_OFF        300 // 30.0 degC
 #define TEMP_DELTA_THRESHOLD  20  // 2.0 degC
-#define TEMP_MAX              500 // 70.0 degC
-#define TEMP_MIN              350 // 45.0 degC
+#define TEMP_MAX              750 // 75.0 degC
+#define TEMP_MIN              400 // 40.0 degC
+#define TEMP_OPTIMAL_LOWER    520 // 52.0 degC
+#define TEMP_OPTIMAL_UPPER    620 // 62.0 degC
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
@@ -61,22 +65,35 @@ void setup()
 
 void loop() 
 {
-if(0)
-{
+#ifdef CAL_MODE
   while(1)
   {
     pixel.show(); // This sends the updated pixel color to the hardware.
     temp_object = (uint16_t)(mlx.readObjectTempC()*10.0);
-    temp_object/=100;
+    uint8_t tens = temp_object/100;
+    uint8_t ones = (temp_object%100)/10;
+    uint8_t decimal = ((temp_object%100)%10);
     for (uint8_t i=0; i<NUM_LEDS; i++)
     {
-      if(i<temp_object)
-        pixel.setPixelColor(i, pixel.Color(100,100,100));
-      else
-        pixel.setPixelColor(i, pixel.Color(0,0,0));
+      uint8_t r = 0;
+      uint8_t g = 0;
+      uint8_t b = 0;
+
+      if(i==tens-1)
+        r = 255;
+
+      if(i==ones-1)
+        g = 255;
+
+      if(i==decimal-1)
+        b = 255;
+      
+        pixel.setPixelColor(i, pixel.Color(r,g,b));
     }  
+
+    //delay(500);
   }
-}
+#endif
   
   pixel.show(); // This sends the updated pixel color to the hardware.
   switch(currentState)
@@ -186,7 +203,7 @@ state_t do_Running(void)
   }
 
   // if optimum temperature, do a little animation
-  if(temp_object > 50 && temp_object < 60)
+  if(temp_object > TEMP_OPTIMAL_LOWER && temp_object < TEMP_OPTIMAL_UPPER)
   {
     // TODO: needs some sort of timer on this, dont want it going off all the time
     return transition_E();
