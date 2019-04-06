@@ -209,7 +209,7 @@ state_t do_Running(void)
   // update the LED colours based on temp
   if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
-    uint8_t r,g,b;
+    uint8_t r = 0, g = 0, b = 0;
     setTimer(&ledTimer); // reset timer
     
     if(temp_object < TEMP_OPTIMAL_LOWER)
@@ -217,11 +217,14 @@ state_t do_Running(void)
     else if(temp_object < TEMP_OPTIMAL_MID)
       g = BRIGHTNESS;
     else if(temp_object < TEMP_OPTIMAL_UPPER)
+    {
       flash_green_process();
+      return kRunning;
+    }
     else
       r = BRIGHTNESS;
   
-    SetColourTargetAll(r,0,b);
+    SetColourTargetAll(r,g,b);
   }
   
   return kRunning;
