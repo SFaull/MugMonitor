@@ -15,7 +15,7 @@
 
 //#define CAL_MODE  // uncomment to enter calibration mode (temperature displayed as clock, format rg.b degrees)
 
-#define NUM_LEDS 13 // actually only 12 LEDs, one fake one to account for gap by connector
+#define NUM_LEDS 12
 #define DATA_PIN 1
 #define LED_UPDATE_TIMEOUT 5
 #define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
@@ -26,16 +26,31 @@
 #define TEMP_SENSE_ON         350 // 35.0 degC
 #define TEMP_SENSE_OFF        300 // 30.0 degC
 #define TEMP_DELTA_THRESHOLD  20  // 2.0 degC
-#define TEMP_MAX              750 // 75.0 degC
-#define TEMP_MIN              400 // 40.0 degC
-#define TEMP_OPTIMAL_LOWER    520 // 52.0 degC
+
+/*  The following threshold define the temperature at which colour changes occur:
+ *                    |
+ *                    | Red
+ * TEMP_OPTIMAL_UPPER--
+ *                    | Green
+ * TEMP_OPTIMAL_MID----
+ *                    | Green (Flashing)
+ * TEMP_OPTIMAL_LOWER--
+ *                    | Blue
+ * TEMP_MIN------------
+ *                    | Off
+ *                    |
+ */
+ 
 #define TEMP_OPTIMAL_UPPER    620 // 62.0 degC
+#define TEMP_OPTIMAL_MID      560 // 56.0 degC
+#define TEMP_OPTIMAL_LOWER    520 // 52.0 degC
+#define TEMP_MIN              400 // 40.0 degC
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 unsigned long ledTimer;
-unsigned long animationTimerA;
+unsigned long animationTimer;
 
 uint8_t currentColour[3];
 
@@ -43,8 +58,7 @@ typedef enum {
     kStandby = 0,
     kStartup = 1,
     kRunning = 2,
-    kReminder = 3,
-    kShutdown = 4
+    kShutdown = 3
 } state_t;
 
 state_t currentState;
@@ -107,9 +121,6 @@ void loop()
       case kRunning:
           currentState = do_Running();
           break;
-      case kReminder:
-          currentState = do_Reminder();
-          break;
       case kShutdown:
           currentState = do_Shutdown();
           break;
@@ -124,7 +135,7 @@ state_t transition_A(void)
 {
     // TODO: intiate startup animation
     SetColourAll(0,0,0);
-    setTimer(&animationTimerA); // reset timer
+    setTimer(&animationTimer); // reset timer
     ledIndex=0;
     startupCycles=0;
     return kStartup;
@@ -145,13 +156,6 @@ state_t transition_D(void)
 {
     SetColourAll(0,0,0);
     return kStandby;
-}
-
-state_t transition_E(void)
-{
-  // start animation
-  setTimer(&animationTimerA); // reset timer
-  return kReminder;
 }
 
 state_t do_Standby(void)
@@ -180,9 +184,9 @@ state_t do_Startup(void)
         return transition_B();
 
   // do animation
-  if(timerExpired(animationTimerA, SWEEP_TIMEOUT))
+  if(timerExpired(animationTimer, SWEEP_TIMEOUT))
   {
-    setTimer(&animationTimerA); // reset timer
+    setTimer(&animationTimer); // reset timer
     SetColourAll(0,0,0);
     SetColour(ledIndex++,BRIGHTNESS,BRIGHTNESS,BRIGHTNESS);
   }
@@ -202,62 +206,25 @@ state_t do_Running(void)
     return transition_C();
   }
 
-  // if optimum temperature, do a little animation
-  if(temp_object > TEMP_OPTIMAL_LOWER && temp_object < TEMP_OPTIMAL_UPPER)
-  {
-    // TODO: needs some sort of timer on this, dont want it going off all the time
-    return transition_E();
-  }
-  
   // update the LED colours based on temp
   if(timerExpired(ledTimer, LED_UPDATE_TIMEOUT))
   {
+    uint8_t r,g,b;
     setTimer(&ledTimer); // reset timer
-
-    uint8_t r,b;
     
-    if (temp_object < TEMP_MIN)
-      temp_object=TEMP_MIN;
-
-    if (temp_object > TEMP_MAX)
-      temp_object=TEMP_MAX;
-    
-    r = map(temp_object, TEMP_MIN, TEMP_MAX, 0, BRIGHTNESS);
-    b = map(temp_object, TEMP_MIN, TEMP_MAX, BRIGHTNESS, 0);
+    if(temp_object < TEMP_OPTIMAL_LOWER)
+      b = BRIGHTNESS;
+    else if(temp_object < TEMP_OPTIMAL_MID)
+      g = BRIGHTNESS;
+    else if(temp_object < TEMP_OPTIMAL_UPPER)
+      flash_green_process();
+    else
+      r = BRIGHTNESS;
   
     SetColourTargetAll(r,0,b);
   }
-
-
-  return kRunning;
-}
-
-
-state_t do_Reminder(void)
-{
-  static bool targetMet = false;
-  static uint8_t brightness = BRIGHTNESS;
   
-  if(timerExpired(animationTimerA, 5))
-  {
-    setTimer(&animationTimerA); // reset timer
-    targetMet = SetColourTargetAll(0,brightness, 0);
-  }
-
-  if(targetMet)
-  {
-    targetMet = false;
-    
-    if (brightness == BRIGHTNESS)
-      brightness = 0;
-    else if (brightness == 0)
-    {
-      brightness = BRIGHTNESS;
-      return transition_B();
-    }
-  }
-
-  return kReminder;
+  return kRunning;
 }
 
 state_t do_Shutdown(void)
@@ -272,6 +239,24 @@ state_t do_Shutdown(void)
    return transition_D();
 
   return kShutdown;
+}
+
+void flash_green_process(void)
+{
+  static bool targetMet = false;
+  static uint8_t brightness = BRIGHTNESS;
+  
+  targetMet = SetColourTargetAll(0,brightness, 0);
+
+  if(targetMet)
+  {
+    targetMet = false;
+    
+    if (brightness == BRIGHTNESS)
+      brightness = 0;
+    else if (brightness == 0)
+      brightness = BRIGHTNESS;
+  }
 }
 
 void updateReadings(void)
