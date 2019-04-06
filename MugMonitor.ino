@@ -343,3 +343,16 @@ bool SetColourTargetAll(uint8_t r, uint8_t g, uint8_t b)
 
   return targetMet;
 }
+
+
+/* Compile time config value checks */
+
+#if (TEMP_OPTIMAL_UPPER < TEMP_OPTIMAL_MID)
+  #error "TEMP_OPTIMAL_UPPER must be greater than TEMP_OPTIMAL_MID"
+#endif
+#if (TEMP_OPTIMAL_MID < TEMP_OPTIMAL_LOWER)
+  #error "TEMP_OPTIMAL_MID must be greater than TEMP_OPTIMAL_LOWER"
+#endif
+#if (TEMP_OPTIMAL_LOWER < TEMP_MIN)
+  #error "TEMP_OPTIMAL_LOWER must be greater than TEMP_MIN"
+#endif
