@@ -215,12 +215,12 @@ state_t do_Running(void)
     if(temp_object < TEMP_OPTIMAL_LOWER)
       b = BRIGHTNESS;
     else if(temp_object < TEMP_OPTIMAL_MID)
-      g = BRIGHTNESS;
-    else if(temp_object < TEMP_OPTIMAL_UPPER)
     {
       flash_green_process();
       return kRunning;
     }
+    else if(temp_object < TEMP_OPTIMAL_UPPER)
+      g = BRIGHTNESS;
     else
       r = BRIGHTNESS;
   
