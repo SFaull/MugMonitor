@@ -12,39 +12,7 @@
 #include <TinyWireM.h> 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
-
-//#define CAL_MODE  // uncomment to enter calibration mode (temperature displayed as clock, format rg.b degrees)
-
-#define NUM_LEDS 12
-#define DATA_PIN 1
-#define LED_UPDATE_TIMEOUT 5
-#define STARTUP_ANIMATION_DURATION 500 // 0.5 seconds
-#define SWEEP_TIMEOUT 30
-
-// configuration options (all temperatures are scaled up by 10)
-#define BRIGHTNESS            200 // 255 is max 
-#define TEMP_SENSE_ON         350 // 35.0 degC
-#define TEMP_SENSE_OFF        300 // 30.0 degC
-#define TEMP_DELTA_THRESHOLD  20  // 2.0 degC
-
-/*  The following threshold define the temperature at which colour changes occur:
- *                    |
- *                    | Red
- * TEMP_OPTIMAL_UPPER--
- *                    | Green
- * TEMP_OPTIMAL_MID----
- *                    | Green (Flashing)
- * TEMP_OPTIMAL_LOWER--
- *                    | Blue
- * TEMP_MIN------------
- *                    | Off
- *                    |
- */
- 
-#define TEMP_OPTIMAL_UPPER    620 // 62.0 degC
-#define TEMP_OPTIMAL_MID      560 // 56.0 degC
-#define TEMP_OPTIMAL_LOWER    520 // 52.0 degC
-#define TEMP_MIN              400 // 40.0 degC
+#include "config.h"
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
@@ -71,8 +39,9 @@ uint8_t startupCycles = 0;
 
 void setup() 
 {
+  // initialise the sensor and LEDs
   mlx.begin();  
-  pixel.begin(); // This initializes the NeoPixel library.
+  pixel.begin();
   
   currentState = kStandby;
 }
@@ -89,20 +58,13 @@ void loop()
     uint8_t decimal = ((temp_object%100)%10);
     for (uint8_t i=0; i<NUM_LEDS; i++)
     {
-      uint8_t r = 0;
-      uint8_t g = 0;
-      uint8_t b = 0;
+      uint8_t r = 0, g = 0, b = 0;
 
-      if(i==tens-1)
-        r = 255;
-
-      if(i==ones-1)
-        g = 255;
-
-      if(i==decimal-1)
-        b = 255;
+      if(i==tens-1)        r = BRIGHTNESS;
+      if(i==ones-1)        g = BRIGHTNESS;
+      if(i==decimal-1)     b = BRIGHTNESS;
       
-        pixel.setPixelColor(i, pixel.Color(r,g,b));
+      pixel.setPixelColor(i, pixel.Color(r,g,b));
     }  
 
     //delay(500);
