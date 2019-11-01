@@ -37,7 +37,8 @@
 #define TEMP_SENSE_OFF        300 // 30.0 degC
 #define TEMP_DELTA_THRESHOLD  20  // 2.0 degC
 
+#define HYSTERESIS            10
+
 
 
  
-

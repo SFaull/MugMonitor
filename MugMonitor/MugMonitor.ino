@@ -8,20 +8,17 @@
  *  - Some sort of "optimum drinking temperature" animation or alarm
  */
 
-
+/* Includes */
 #include <TinyWireM.h> 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
 #include "config.h"
 
+/* Class instances */
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
-unsigned long ledTimer;
-unsigned long animationTimer;
-
-uint8_t currentColour[3];
-
+/* Custom types */
 typedef enum {
     kStandby = 0,
     kStartup = 1,
@@ -29,14 +26,28 @@ typedef enum {
     kShutdown = 3
 } state_t;
 
-state_t currentState;
+typedef enum {
+  kCold = 0,
+  kCool,
+  kWarm,
+  kHot,
+  kScolding
+} temperature_t;
 
+/* Global Variables */
+const uint16_t thresholds[] = { TEMP_MIN , TEMP_OPTIMAL_LOWER, TEMP_OPTIMAL_MID, TEMP_OPTIMAL_UPPER};
+const int thresholdCount = sizeof(thresholds)/sizeof(uint16_t);
+unsigned long ledTimer;
+unsigned long animationTimer;
+uint8_t currentColour[3];
+state_t currentState;
 uint16_t temp_ambient = 0;
 uint16_t temp_object = 0;
-
 uint8_t ledIndex = 0;
 uint8_t startupCycles = 0;
 
+
+/* Initialisation */
 void setup() 
 {
   // initialise the sensor and LEDs
@@ -46,6 +57,7 @@ void setup()
   currentState = kStandby;
 }
 
+/* Main code entry point */
 void loop() 
 {
 #ifdef CAL_MODE
@@ -164,7 +176,6 @@ state_t do_Running(void)
   // if object gone, shutdown
   if (isObjectRemoved())
   {
-    //Serial.println("No object present!");
     return transition_C();
   }
 
@@ -173,18 +184,17 @@ state_t do_Running(void)
   {
     uint8_t r = 0, g = 0, b = 0;
     setTimer(&ledTimer); // reset timer
-    
-    if(temp_object < TEMP_OPTIMAL_LOWER)
-      b = BRIGHTNESS;
-    else if(temp_object < TEMP_OPTIMAL_MID)
+
+    temperature_t tempState = getTemperatureState();
+
+    switch(tempState)
     {
-      flash_green_process();
-      return kRunning;
+      case kCold:       /* do nothing */        break;
+      case kCool:       b = BRIGHTNESS;         break;
+      case kWarm:       flash_green_process();  return kRunning;
+      case kHot:        g = BRIGHTNESS;         break;
+      case kScolding:   r = BRIGHTNESS;         break;
     }
-    else if(temp_object < TEMP_OPTIMAL_UPPER)
-      g = BRIGHTNESS;
-    else
-      r = BRIGHTNESS;
   
     SetColourTargetAll(r,g,b);
   }
@@ -307,6 +317,21 @@ bool SetColourTargetAll(uint8_t r, uint8_t g, uint8_t b)
     pixel.setPixelColor(i, pixel.Color(currentColour[0],currentColour[1],currentColour[2]));
 
   return targetMet;
+}
+
+temperature_t getTemperatureState()
+{
+  static int objectState = 0;
+
+  while (objectState < thresholdCount && temp_object >= thresholds[objectState]) {
+    ++objectState;
+  }
+
+  while (objectState > 0 && temp_object < thresholds[objectState-1] - HYSTERESIS) {
+    --objectState;
+  }
+
+  return (temperature_t)objectState;
 }
 
 
