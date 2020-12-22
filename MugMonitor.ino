@@ -8,11 +8,14 @@
  *  - Some sort of "optimum drinking temperature" animation or alarm
  */
 
+// https://www.vishay.com/docs/83752/tcrt1000.pdf
 
 #include <TinyWireM.h> 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_MLX90614.h>
 #include "config.h"
+
+
 
 Adafruit_NeoPixel pixel = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
@@ -42,12 +45,32 @@ void setup()
   // initialise the sensor and LEDs
   mlx.begin();  
   pixel.begin();
-  
+  //pinMode(SENSE_PIN, INPUT_PULLUP);
   currentState = kStandby;
 }
 
 void loop() 
 {
+#ifdef DEBUG_MODE
+  while(1)
+  {
+    bool pressed = !(analogRead(SENSE_PIN) < 10);
+    
+    for (uint8_t i=0; i<NUM_LEDS; i++)
+    {
+      uint8_t r = 0, g = 0, b = 0;
+
+      r = pressed ? BRIGHTNESS : 0;
+      g = pressed ? BRIGHTNESS : 0;
+      b = pressed ? BRIGHTNESS : 0;
+      
+      pixel.setPixelColor(i, pixel.Color(r,g,b));
+    }
+
+    pixel.show(); // This sends the updated pixel color to the hardware.
+  }
+#endif
+  
 #ifdef CAL_MODE
   while(1)
   {
@@ -234,6 +257,15 @@ void updateReadings(void)
 /* object is assumed present if there is a large enough positive delta between object temp and ambient temp */
 bool isObjectPresent(void)
 {
+  long reading = 0;
+  for(int i = 0; i < 100; i++)
+  {
+    reading += analogRead(SENSE_PIN);
+  }
+  reading /= 100;
+  
+  return (reading > 100);
+  #if 0
   uint16_t temp_delta = temp_object - temp_ambient;
   
   // check delta is large enough and that object temperature exceeds minimum temperature
@@ -241,11 +273,22 @@ bool isObjectPresent(void)
     return true;
 
   return false;
+  #endif
 }
 
 // assumes aboject was present in the first place
 bool isObjectRemoved(void)
 {
+  // make sure the object is not detected 5 times in a row to be sure it's gone (filter out noise)
+    for(int i = 0; i < 5; i++)
+    {
+      if(isObjectPresent())
+        return false;
+      delay(100);
+    }
+    
+    return true;
+  #if 0
   // TODO: this could be achieved a different way by looking for a rapid decrease in value
   
   uint16_t temp_delta = temp_object - temp_ambient;
@@ -256,6 +299,7 @@ bool isObjectRemoved(void)
     return true;
 
   return false;
+  #endif
 }
 
 /* pass this function a pointer to an unsigned long to store the start time for the timer */

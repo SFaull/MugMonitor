@@ -1,10 +1,11 @@
 // Devlopment tools
 //#define CAL_MODE  // uncomment to enter calibration mode (temperature displayed as clock, format rg.b degrees)
+//#define DEBUG_MODE
 
 // Hardware configuration
 #define NUM_LEDS    11
 #define DATA_PIN    1
-
+#define SENSE_PIN   A2
 
 // Customisations
 #define LED_UPDATE_TIMEOUT          5
@@ -40,4 +41,3 @@
 
 
  
-
